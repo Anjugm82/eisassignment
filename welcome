@@ -1,0 +1,708 @@
+<?php
+defined('BASEPATH') or exit('No direct script access allowed');
+
+class Welcome extends CI_Controller
+{
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->load->model('imagemodel');
+        $this->load->helper(array('form', 'url', 'html'));
+    }
+	
+	/**
+* This function 'll load the home page with the jason decoded weather details of Dublin city.
+*
+* @access public
+
+* @return 
+*/
+
+    public function index()
+    {
+        $url = "http://api.openweathermap.org/data/2.5/forecast?q=Dublin,IE&appid=d828bc57d263d11b348eba143fa7c5c8";
+
+        $contents = file_get_contents($url);
+        $climas['clima'] = json_decode($contents);
+        $this->load->view('header', $climas);
+
+        $this->load->view('welcome_message', $climas);
+       
+
+    }
+		/**
+* This function 'll load the smtp page to add new smtp
+*
+* @access public
+
+* @return 
+*/
+	
+	  public function smtp()
+    {
+        
+        $this->load->view('header');
+        $this->load->view('smtp');
+       
+
+    }
+
+
+		/**
+* This function 'll load the view page of gallery to upload photos and view photos.
+*
+* @access public
+
+* @return 
+*/
+    public function gallery()
+    {
+        $this->load->model('imagemodel');
+        $this->load->helper(array('form', 'url', 'html'));
+        $query = $this->imagemodel->imgget('gallery');
+        $data['gallery'] = $query;
+        $this->load->view('header');
+        $this->load->view('gallery', $data);
+ 
+    }
+			/**
+* This function 'll insert the image to folder and name in database.
+*
+* @access public
+
+* @return 
+*/
+	
+
+    public function imageupload()
+    {
+        $this->load->model('imagemodel');
+        $this->load->helper(array('form', 'url', 'html'));
+        //$img=$this->input->post('image');
+        $img = array
+            (
+            'name' => $_FILES["image"]["name"],
+
+        );
+
+        $new_image_name = ($_FILES['image']['name']);
+        $config['upload_path'] = './uploads/';
+        $config['allowed_types'] = 'gif|jpg|png|bmp|jpeg';
+        $config['file_name'] = $new_image_name;
+        $config['max_size'] = '0';
+        $config['max_width'] = '0';
+        $config['max_height'] = '0';
+        $config['$min_width'] = '0';
+        $config['min_height'] = '0';
+        $this->load->library('upload', $config);
+        $upload = $this->upload->do_upload('image');
+        $this->imagemodel->imginsert('gallery', $img);
+        redirect(base_url() . 'index.php/gallerys');
+
+    }
+	
+/**
+* This function 'll load the view page to search and send mail for thunderstorm and current weather.
+*
+* @access public
+
+* @return 
+*/
+
+
+    public function stormmail()
+    {
+
+        $this->load->view('header');
+        $this->load->view('storm_mail');
+
+    }
+	
+/**
+* This function 'll  check  for thunderstorm effect for selected cities and send mail when result is true.
+*
+* @access public
+
+* @return 
+*/
+
+    public function stormmailsubmit()
+    {
+
+        if ($_POST['submit']) {
+
+            $city = array();
+            $country = array();
+
+            if (isset($_POST['dublin'])) {
+                array_push($city, $_POST['dublin']);
+            }
+            if (isset($_POST['cork'])) {
+                array_push($city, $_POST['cork']);
+            }
+            if (isset($_POST['limerick'])) {
+                array_push($city, $_POST['limerick']);
+            }
+            if (isset($_POST['galway'])) {
+                array_push($city, $_POST['galway']);
+            }
+            if (isset($_POST['swords'])) {
+                array_push($city, $_POST['swords']);
+            }
+            if (isset($_POST['dundalk'])) {
+                array_push($city, $_POST['dundalk']);
+            }
+
+            $arch_weather = array();
+            foreach ($city as $key => $value) {
+                array_push($arch_weather, $this->get_weather($value, 'IE'));
+            }
+
+            $data = '';
+            foreach ($arch_weather as $key => $value) {
+                foreach ($arch_weather[$key] as $key => $value) {
+                    $icon = $this->get_icons($value['weather_id']);
+                    $data .= "
+                <img style='width:120px;height:120px;' src='http://openweathermap.org/img/w/" . $icon . ".png' >
+                <table>
+                <tr>
+                    <th>City Name :</th>
+                    <td>" . $value['city_name'] . "</td>
+                </tr>
+                <tr>
+                    <th>Minimum Temperature :</th>
+                    <td>" . $value['min_temperature'] . "</td>
+                </tr>
+                <tr>
+                    <th>Maximum Temperature :</th>
+                    <td>" . $value['max_temperature'] . "</td>
+                </tr>
+                <tr>
+                    <th>Temperature :</th>
+                    <td>" . $value['temperature'] . "</td>
+                </tr>
+                <tr>
+                    <th>Date and Time :</th>
+                    <td>" . $value['date_time'] . "</td>
+                </tr>
+                <tr>
+                    <th>Description :</th>
+                    <td>" . $value['description'] . "</td>
+                 </tr>
+                </table>";
+                }
+            }
+
+            if (isset($data) && $data != '') {
+                $report_weather = $data;
+            }
+
+            $emailArr = array(
+                'to' => isset($_POST['mail_re']) ? $_POST['mail_re'] : 'harold@euphontec.com', //$email id,
+                'to_cc' => '', 
+                'from' => 'weatherapp@gmail.com',
+                'from_name' => 'Weather_app',
+                'subject' => 'Thunderstorm alert',
+                'message' => $report_weather,
+
+            );
+			 $smtpA=$this->imagemodel->smtpget('smtp');
+			 
+			  foreach($smtpA as $smtpB)
+			  {
+				  $host= $smtpB->host;
+				 $port= $smtpB->port;
+				  $username= $smtpB->username;
+				 $password= $smtpB->password;
+				
+				
+			  }
+
+            if (isset($report_weather) && $report_weather != '') {
+             
+                 $this->mailer->send_mail($emailArr,$host,$port,$username,$password, $bcc = false, $attachment = false, $bccEmail = '');
+                $this->mailer->ClearAllRecipients();
+                $this->mailer->ClearAttachments();
+				if($this->mailer->send_mail($emailArr,$host,$port,$username,$password, $bcc = false, $attachment = false, $bccEmail = '')==true)
+				{
+                $this->session->set_flashdata('thunderstorm', 'The weather report is send to your mail address.');
+				}
+				else
+				{
+					$this->session->set_flashdata('thunder', 'Please check your SMTP settings.');
+				}
+
+                redirect(base_url() . 'index.php/mail_storm');
+            } else {
+                $this->session->set_flashdata('thunder', 'There is no thunderstorm in this week.');
+                redirect(base_url() . 'index.php/mail_storm');
+            }
+        } else {
+            redirect(base_url() . 'index.php/mail_storm');
+        }
+    }
+	
+	
+/**
+* This function 'll  check and fetch the current weather details of selected cities and send report.
+*
+* @access public
+
+* @return 
+*/
+	
+	
+	    public function stormmailsubmitcnt()
+    {
+
+        if ($_POST['submits']) {
+
+            $city = array();
+            $country = array();
+
+            if (isset($_POST['dublin'])) {
+                array_push($city, $_POST['dublin']);
+            }
+            if (isset($_POST['cork'])) {
+                array_push($city, $_POST['cork']);
+            }
+            if (isset($_POST['limerick'])) {
+                array_push($city, $_POST['limerick']);
+            }
+            if (isset($_POST['galway'])) {
+                array_push($city, $_POST['galway']);
+            }
+            if (isset($_POST['swords'])) {
+                array_push($city, $_POST['swords']);
+            }
+            if (isset($_POST['dundalk'])) {
+                array_push($city, $_POST['dundalk']);
+            }
+
+            $arch_weather = array();
+            foreach ($city as $key => $value) {
+                array_push($arch_weather, $this->get_weathercnt($value, 'IE'));
+            }
+
+            $data = '';
+            foreach ($arch_weather as $key => $value) {
+                foreach ($arch_weather[$key] as $key => $value) {
+                    $icon = $this->get_icons($value['weather_id']);
+                    $data .= "
+                <img style='width:120px;height:120px;' src='http://openweathermap.org/img/w/" . $icon . ".png' >
+                <table>
+                <tr>
+                    <th>City Name :</th>
+                    <td>" . $value['city_name'] . "</td>
+                </tr>
+                <tr>
+                    <th>Minimum Temperature :</th>
+                    <td>" . $value['min_temperature'] . "</td>
+                </tr>
+                <tr>
+                    <th>Maximum Temperature :</th>
+                    <td>" . $value['max_temperature'] . "</td>
+                </tr>
+                <tr>
+                    <th>Temperature :</th>
+                    <td>" . $value['temperature'] . "</td>
+                </tr>
+                <tr>
+                    <th>Date and Time :</th>
+                    <td>" . $value['date_time'] . "</td>
+                </tr>
+                <tr>
+                    <th>Description :</th>
+                    <td>" . $value['description'] . "</td>
+                 </tr>
+                </table>";
+                }
+            }
+
+            if (isset($data) && $data != '') {
+                $report_weather = $data;
+            }
+
+            $emailArr = array(
+                'to' => isset($_POST['mail_re']) ? $_POST['mail_re'] : 'harold@euphontec.com', //$email id,
+                'to_cc' => '', 
+                'from' => 'weatherapp@gmail.com',
+                'from_name' => 'Weather_app',
+                'subject' => 'Todays weather',
+                'message' => $report_weather,
+
+            );
+			
+			  $smtpA=$this->imagemodel->smtpget('smtp');
+			 
+			  foreach($smtpA as $smtpB)
+			  {
+				  $host= $smtpB->host;
+				 $port= $smtpB->port;
+				  $username= $smtpB->username;
+				 $password= $smtpB->password;
+				
+				
+			  }
+			
+
+
+            if (isset($report_weather) && $report_weather != '') {
+               
+                $this->mailer->send_mail($emailArr,$host,$port,$username,$password, $bcc = false, $attachment = false, $bccEmail = '');
+                $this->mailer->ClearAllRecipients();
+                $this->mailer->ClearAttachments();
+				if($this->mailer->send_mail($emailArr,$host,$port,$username,$password, $bcc = false, $attachment = false, $bccEmail = '')==true)
+				{
+                $this->session->set_flashdata('thunderstorm', 'The weather report is send to your mail address.');
+				}
+				else
+				{
+					$this->session->set_flashdata('thunder', 'Please check your SMTP settings.');
+				}
+
+                redirect(base_url() . 'index.php/mail_storm');
+            } else {
+                $this->session->set_flashdata('thunder', 'Some Error occured please try again.');
+                redirect(base_url() . 'index.php/mail_storm');
+            }
+        } else {
+            redirect(base_url() . 'index.php/mail_storm');
+        }
+    }
+	
+/**
+* This function 'll  fetch the required details of thunderstorm event for the selected cities and return the array result
+*
+* @access private
+* @params Array,Array
+* @return 
+*/
+
+    public function get_weather($city, $country_code)
+    {
+
+        $url = "http://api.openweathermap.org/data/2.5/forecast?q=$city,$country_code&appid=d828bc57d263d11b348eba143fa7c5c8";
+
+        $contents = file_get_contents($url);
+        $climas = '';
+        $climas = json_decode($contents);
+        $weath = $climas;
+        $temperature = "";
+        $date_time = "";
+        $date_time_ = "";
+        echo "<pre>";
+
+        $cod = '';
+        $cnt = 0;
+        $message = '';
+        $list = array();
+        $city = array();
+        $city_details = array();
+        foreach ($climas as $key => $value) {
+            switch ($key) {
+                case 'cod':
+                    $cod = $value;
+                    break;
+                case 'cnt':
+                    $cnt = (int) $value;
+                    break;
+                case 'message':
+                    $message = $value;
+                    break;
+                case 'list':
+                    $list = $value;
+                    break;
+                case 'city':
+                    $city = $value;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        for ($i = 0; $i < $cnt; $i++) {
+            $emp = array();
+            if ($list[$i]->weather[0]->id == 211) {
+
+                $emp['temperature'] = $list[$i]->main->temp;
+                $emp['min_temperature'] = $list[$i]->main->temp_min;
+                $emp['max_temperature'] = $list[$i]->main->temp_max;
+                $emp['date_time'] = $list[$i]->dt_txt;
+                $emp['city_name'] = $city->name;
+                $emp['city_id'] = $city->id;
+                $emp['weather_id'] = $list[$i]->weather[0]->id;
+                $emp['description'] = $list[$i]->weather[0]->description;
+                array_push($city_details, $emp);
+            }
+        }
+
+        return $city_details;
+    }
+	
+/**
+* This function 'll  fetch the required details of current weather conditions for the selected cities and return the array result
+*
+* @access private
+* @params Array,Array
+* @return 
+*/
+	
+	public function get_weathercnt($city, $country_code)
+    {
+
+        $url = "http://api.openweathermap.org/data/2.5/forecast?q=$city,$country_code&appid=d828bc57d263d11b348eba143fa7c5c8";
+
+        $contents = file_get_contents($url);
+        $climas = '';
+        $climas = json_decode($contents);
+        $weath = $climas;
+        $temperature = "";
+        $date_time = "";
+        $date_time_ = "";
+        echo "<pre>";
+
+        $cod = '';
+        $cnt = 0;
+        $message = '';
+        $list = array();
+        $city = array();
+        $city_details = array();
+        foreach ($climas as $key => $value) {
+            switch ($key) {
+                case 'cod':
+                    $cod = $value;
+                    break;
+                case 'cnt':
+                    $cnt = (int) $value;
+                    break;
+                case 'message':
+                    $message = $value;
+                    break;
+                case 'list':
+                    $list = $value;
+                    break;
+                case 'city':
+                    $city = $value;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        for ($i = 0; $i < 3; $i++) {
+            $emp = array();
+
+                $emp['temperature'] = $list[$i]->main->temp;
+                $emp['min_temperature'] = $list[$i]->main->temp_min;
+                $emp['max_temperature'] = $list[$i]->main->temp_max;
+                $emp['date_time'] = $list[$i]->dt_txt;
+                $emp['city_name'] = $city->name;
+                $emp['city_id'] = $city->id;
+                $emp['weather_id'] = $list[$i]->weather[0]->id;
+                $emp['description'] = $list[$i]->weather[0]->description;
+                array_push($city_details, $emp);
+         
+        }
+
+        return $city_details;
+    }
+	
+	
+	/**
+* This function 'll  fetch the required weather icons of the weather condition . 
+*
+* @access private
+* @params Array,
+* @return 
+*/
+
+    public function get_icons($id = 003)
+    {
+        echo "<pre>";
+        $data_icons = [
+            [200, 'thunderstorm with light rain', '11d'],
+            [201, 'thunderstorm with rain', '11d'],
+            [202, 'thunderstorm with heavy rain', '11d'],
+            [210, 'light thunderstorm', '11d'],
+            [211, 'thunderstorm', '11d'],
+            [212, 'heavy thunderstorm', '11d'],
+            [221, 'ragged thunderstorm', '11d'],
+            [230, 'thunderstorm with light drizzle', '11d'],
+            [231, 'thunderstorm with drizzle', '11d'],
+            [232, 'thunderstorm with heavy drizzle', '11d'],
+            [300, 'light intensity drizzle', '09d'],
+            [301, 'drizzle', '09d'],
+            [302, 'heavy intensity drizzle', '09d'],
+            [310, 'light intensity drizzle rain', '09d'],
+            [311, 'drizzle rain', '09d'],
+            [312, 'heavy intensity drizzle rain', '09d'],
+            [313, 'shower rain and drizzle', '09d'],
+            [314, 'heavy shower rain and drizzle', '09d'],
+            [321, 'shower drizzle', '09d'],
+            [500, 'light rain', '10d'],
+            [501, 'moderate rain', '10d'],
+            [502, 'heavy intensity rain', '10d'],
+            [503, 'very heavy rain', '10d'],
+            [504, 'extreme rain', '10d'],
+            [511, 'freezing rain', '13d'],
+            [520, 'light intensity shower rain', '09d'],
+            [521, 'shower rain', '09d'],
+            [522, 'heavy intensity shower rain', '09d'],
+            [531, 'ragged shower rain', '09d'],
+            [600, 'light snow', '13d'],
+            [601, 'snow', '13d'],
+            [602, 'heavy snow', '13d'],
+            [611, 'sleet', '13d'],
+            [612, 'shower sleet', '13d'],
+            [615, 'light rain and snow', '13d'],
+            [616, 'rain and snow', '13d'],
+            [620, 'light shower snow', '13d'],
+            [621, 'shower snow', '13d'],
+            [622, 'heavy shower snow', '13d'],
+            [701, 'mist', '50d'],
+            [711, 'smoke', '50d'],
+            [721, 'haze', '50d'],
+            [731, 'sand dust whirls', '50d'],
+            [741, 'fog', '50d'],
+            [751, 'sand', '50d'],
+            [761, 'dust', '50d'],
+            [762, 'volcanic ash', '50d'],
+            [771, 'squalls', '50d'],
+            [781, 'tornado', '50d'],
+            [800, 'clear sky', '01d'],
+            [801, 'few clouds', '02d'],
+            [802, 'scattered clouds', '03d'],
+            [803, 'broken clouds', '04d'],
+            [804, 'overcast clouds', '04n'],
+        ];
+        foreach ($data_icons as $key => $value) {
+            if ($value[0] == $id) {
+                return $value[2];
+            }
+        }
+
+    }
+	
+/**
+* This function 'll  insert the new smtp settings to database and check for weather there is any previous smtp configurations exits in database.  . 
+*
+* @access private
+
+* @return 
+*/
+	
+	
+	
+	  public function smtpinsert()
+    {
+		 $this->load->model('imagemodel');
+        $this->load->helper(array('form', 'url', 'html'));
+		
+		if ($_POST['submit']) {
+			$smtpget=$this->imagemodel->smtpcheck();
+			if($smtpget>0)
+			{
+				
+				$this->session->set_flashdata('thunder', 'Please edit or remove the previous smtp configuration to add new one.');
+         redirect(base_url() . 'index.php/smtpconfig');
+			}
+			else
+			{
+	
+			 $smtparr = array(
+                'host' => $_POST['host'], 
+                'port' => $_POST['port'], 
+                'username' => $_POST['username'],
+				'password' =>$_POST['password'],
+				
+
+            );
+			$this->imagemodel->smtpinsert('smtp', $smtparr);
+
+$this->session->set_flashdata('thunderstorm', 'New smtp settings are configured.');
+         redirect(base_url() . 'index.php/smtpconfig');
+
+    }
+		}
+	
+	}
+	
+	/**
+* This function is to edit the Previous stmtp configurations in database    . 
+*
+* @access private
+
+* @return 
+*/
+	
+	
+	
+	 public function smtpedit()
+    {
+		 $this->load->model('imagemodel');
+        $this->load->helper(array('form', 'url', 'html'));
+			
+			$smtpedit=$this->imagemodel->smtpedit();
+			  
+			  $data['smtped'] = $smtpedit;
+			  if(empty($smtpedit))
+			  {
+				  $this->session->set_flashdata('thunders', 'No smtp details to edit,Please add New smtp configurations.');
+			  }
+        
+        $this->load->view('header');
+        $this->load->view('smtpedit', $data);
+
+	}
+	
+/**
+* This function 'll update the edited stmtp configurations in database.    . 
+*
+* @access private
+
+* @return 
+*/
+	
+	
+	
+	 public function smtpupdate()
+    {
+		 $this->load->model('imagemodel');
+        $this->load->helper(array('form', 'url', 'html'));
+			
+			if ($_POST['submit']) {
+				
+				 $smtparr = array(
+				 'id'=>$_POST['id'],
+                'host' => $_POST['host'], 
+                'port' => $_POST['port'], 
+                'username' => $_POST['username'],
+				'password' =>$_POST['password'],
+				
+
+            );
+			$this->imagemodel->smtpupdate('smtp', $smtparr);
+				$this->session->set_flashdata('thunderstorm', 'Successfully edited your smtp configurations.');
+			}
+			if ($_POST['delete']) {
+				
+				 $smtparr = array(
+				 'id'=>$_POST['id'],
+         
+            );
+			$this->imagemodel->smtpdelete('smtp', $smtparr);
+				$this->session->set_flashdata('thunderstorm', 'Successfully removed your smtp configurations,Add a new one.');
+			}
+			
+        
+        redirect(base_url() . 'index.php/smtpconfig');
+		
+		
+		
+	
+	}
+	
+
+}
